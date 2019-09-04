@@ -26,14 +26,6 @@
 }
 </style>
 
----
-title: "Projekt Poprawkowy"
-author: "Antoni Baum, Bartłomiej Gąsior, Paweł Sumara"
-output: 
-  slidy_presentation: 
-    theme: readable
----
-
 ```{r setup, include=FALSE}
 library(units)
 knitr::opts_chunk$set(echo = FALSE, collapse = TRUE, size = "\\scriptsize")
@@ -55,12 +47,20 @@ dat$acceleration = dat$acceleration * 1.05
 
 dat = drop_units(dat)
 ```
-# Wprowadzenie
-## Wprowadzenie
+
+Projekt Poprawkowy
+========================================================
+author: "Antoni Baum, Bartłomiej Gąsior, Paweł Sumara"
+date: 
+autosize: true
+
+Wprowadzenie
+========================================================
 
 Celem projektu jest budowa modelu liniowego dla spalania w podanych danych. Aby otrzymać model, użyte zostaną zarówno klasyczne metody ekonometryczne, jak i metody bootstrapowe.
 
-## Zmienne
+Zmienne
+========================================================
 Zmienna objaśniana
 
 - **l100km** - spalanie w litrach na 100 kilometrów.
@@ -76,14 +76,19 @@ Zmienne objaśniające
 - **origin** - miejsce produkcji (1 - USA, 2 - Europa, 3 - Japonia),
 - **name** - nazwa samochodu.
 
-## Format danych
+Format danych
+========================================================
+
 ```{r cars, echo = FALSE, results="asis"}
-library(pander)
-panderOptions("digits", 4)
-pander(dat[1, ])
+library(knitr)
+library(kableExtra)
+dat[1, ] %>%
+  kable() %>%
+  kable_styling()
 ```
 
-## Hipotezy
+Hipotezy
+========================================================
 Na samym początku można załozyć, że nazwa samochodu nie będzie miała wpływu na spalanie. Najprawdopodobniej, rok produkcji (im nowszy samochód, tym mniejsze spalanie) oraz waga (im cięższy samochód, tym większe spalanie) będą miały największy wpływ.
 
 Z tego też powodu, odrzucono zmienną **name**.
@@ -91,9 +96,9 @@ Z tego też powodu, odrzucono zmienną **name**.
 ```{r drop, include=FALSE}
 dat=within(dat, rm(name))
 ```
-# Analiza wizualna oraz opisowa
-## Statystyki opisowe
 
+Statystyki opisowe
+========================================================
 ```{r summary, results="asis"}
 library(Rgretl)
 gr.script <- 
@@ -103,11 +108,13 @@ x = run_grcli(gr.script, data = dat, output = list(matr = c("r")))
 x = as.data.frame(x)
 rownames(x) = colnames(dat)
 colnames(x) = c("Mean", "Median", "Min.", "Max.", "Std. dev.", "CV", "Skewness", "Kurtosis", "5th Percentile", "95th Percentile", "Q3-Q1", "Missing obs." )
-pander(x[,1:8])
+x[,1:8]%>%
+  kable() %>%
+  kable_styling()
 ```
 
-## Macierz korelacji
-
+Macierz korelacji
+========================================================
 ```{r corr, results="asis"}
 library(Rgretl)
 gr.script <- 
@@ -117,5 +124,7 @@ x = run_grcli(gr.script, data = dat, output = list(matr = c("r")))
 x = as.data.frame(x)
 rownames(x) = colnames(dat)
 colnames(x) = colnames(dat)
-pander(x)
+x %>%
+  kable() %>%
+  kable_styling()
 ```
