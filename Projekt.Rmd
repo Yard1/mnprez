@@ -1,0 +1,91 @@
+---
+title: "Projekt Poprawkowy"
+author: "Antoni Baum, Bartłomiej Gąsior, Paweł Sumara"
+output: uslides::uslides_html
+---
+
+```{r setup, include=FALSE}
+library(units)
+knitr::opts_chunk$set(echo = FALSE, collapse = TRUE, size = "\\scriptsize")
+dat = read.csv("cars.csv", header = TRUE)
+
+gallon = as_units("gallon")
+dat$mpg = dat$mpg * with(ud_units, mi/gallon)
+units(dat$mpg) = with(ud_units, l/km)
+dat$mpg = dat$mpg*100
+colnames(dat)[1] = "l100km"
+
+dat$displacement = dat$displacement * ud_units[["in"]]^3
+units(dat$displacement) = with(ud_units, l)
+
+dat$weight = dat$weight * with(ud_units, lb)
+units(dat$weight) = with(ud_units, kg)
+
+dat$acceleration = dat$acceleration * 1.05
+
+dat = drop_units(dat)
+```
+# Wprowadzenie
+## Wprowadzenie
+
+Celem projektu jest budowa modelu liniowego dla spalania w podanych danych. Aby otrzymać model, użyte zostaną zarówno klasyczne metody ekonometryczne, jak i metody bootstrapowe.
+
+## Zmienne
+Zmienna objaśniana
+
+- **l100km** - spalanie w litrach na 100 kilometrów.
+
+Zmienne objaśniające
+
+- **cylinders** - liczba cylindrów,
+- **displacement** - objętość silnika w litrach,
+- **horsepower** - moc w koniach mechanicznych,
+- **weight** - waga w kilogramach,
+- **acceleration** - czas przyspieszenia od 0 do 100 kilometrów na godzinę, podany w sekundach,
+- **year** - rok produkcji,
+- **origin** - miejsce produkcji (1 - USA, 2 - Europa, 3 - Japonia),
+- **name** - nazwa samochodu.
+
+## Format danych
+```{r cars, echo = FALSE, results="asis"}
+library(pander)
+panderOptions("digits", 4)
+pander(dat[1, ])
+```
+
+## Hipotezy
+Na samym początku można załozyć, że nazwa samochodu nie będzie miała wpływu na spalanie. Najprawdopodobniej, rok produkcji (im nowszy samochód, tym mniejsze spalanie) oraz waga (im cięższy samochód, tym większe spalanie) będą miały największy wpływ.
+
+Z tego też powodu, odrzucono zmienną **name**.
+
+```{r drop, include=FALSE}
+dat=within(dat, rm(name))
+```
+# Analiza wizualna oraz opisowa
+## Statystyki opisowe
+
+```{r summary, results="asis"}
+library(Rgretl)
+gr.script <- 
+"summary
+matrix r = $result"
+x = run_grcli(gr.script, data = dat, output = list(matr = c("r")))
+x = as.data.frame(x)
+rownames(x) = colnames(dat)
+colnames(x) = c("Mean", "Median", "Min.", "Max.", "Std. dev.", "CV", "Skewness", "Kurtosis", "5th Percentile", "95th Percentile", "Q3-Q1", "Missing obs." )
+pander(x[,1:8])
+```
+
+## Statystyki opisowe
+
+```{r corr, results="asis"}
+library(Rgretl)
+gr.script <- 
+"corr
+matrix r = $result"
+x = run_grcli(gr.script, data = dat, output = list(matr = c("r")))
+x = as.data.frame(x)
+rownames(x) = colnames(dat)
+colnames(x) = colnames(dat)
+pander(x)
+```
