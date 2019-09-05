@@ -53,6 +53,17 @@ autosize: true
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, fig.align='center', collapse = TRUE, size = "\\scriptsize")
+```
+
+Wprowadzenie
+========================================================
+
+Celem projektu jest budowa modelu liniowego dla spalania w podanych danych. Aby otrzymać model, użyte zostaną zarówno klasyczne metody ekonometryczne, jak i metody bootstrapowe.
+
+Przyjęto poziom istotności α = 5%.
+
+Użyte biblioteki:
+```{r libs, echo=TRUE}
 library(dplyr)
 library(nortest)
 library(lmtest)
@@ -64,13 +75,6 @@ library(ggplot2)
 library(knitr)
 library(kableExtra)
 ```
-
-Wprowadzenie
-========================================================
-
-Celem projektu jest budowa modelu liniowego dla spalania w podanych danych. Aby otrzymać model, użyte zostaną zarówno klasyczne metody ekonometryczne, jak i metody bootstrapowe.
-
-Przyjęto poziom istotności α = 5%.
 
 Zmienne
 ========================================================

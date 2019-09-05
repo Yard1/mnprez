@@ -60,6 +60,21 @@ Celem projektu jest budowa modelu liniowego dla spalania w podanych danych. Aby 
 
 Przyjęto poziom istotności α = 5%.
 
+Użyte biblioteki:
+
+```r
+library(dplyr)
+library(nortest)
+library(lmtest)
+library(bootStepAIC)
+library(units)
+library(readr)
+library(tidyr)
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+```
+
 Zmienne
 ========================================================
 Zmienna objaśniana
