@@ -3,8 +3,17 @@
   word-wrap: normal;
   -moz-hyphens: none;
 }
+.reveal .slides>section {
+    overflow-y: scroll;
+}
 .small-code pre code {
   font-size: 1em;
+}
+.reveal h1, .reveal h2, .reveal h3, .reveal h4, .reveal h5, .reveal h6 {
+    font-family: "Roboto", Impact, sans-serif;
+}
+.reveal p {
+    text-align: justify;
 }
 .midcenter {
     position: fixed;
@@ -24,11 +33,67 @@
 .pinky .reveal p {
   color: black;
 }
+pre {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+pre.r {
+  max-height: none;
+}
+.reveal pre code {
+    font-size: 1.4em;
+}
 </style>
 
+Projekt Poprawkowy - Metody Nieparametryczne
+========================================================
+author: Antoni Baum, Paweł Sumara
+autosize: true
+
 ```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.align='center', collapse = TRUE, size = "\\scriptsize")
+library(dplyr)
+library(nortest)
+library(lmtest)
+library(bootStepAIC)
 library(units)
-knitr::opts_chunk$set(echo = FALSE, collapse = TRUE, size = "\\scriptsize")
+library(readr)
+library(tidyr)
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+```
+
+Wprowadzenie
+========================================================
+
+Celem projektu jest budowa modelu liniowego dla spalania w podanych danych. Aby otrzymać model, użyte zostaną zarówno klasyczne metody ekonometryczne, jak i metody bootstrapowe.
+
+Przyjęto poziom istotności α = 5%.
+
+Zmienne
+========================================================
+Zmienna objaśniana
+
+- **l100km** - spalanie w litrach na 100 kilometrów.
+
+Zmienne objaśniające
+
+- **cylinders** - liczba cylindrów,
+- **displacement** - objętość silnika w litrach,
+- **horsepower** - moc w koniach mechanicznych,
+- **weight** - waga w kilogramach,
+- **acceleration** - czas przyspieszenia od 0 do 100 kilometrów na godzinę, podany w sekundach,
+- **year** - rok produkcji (19##),
+- **origin** - miejsce produkcji (1 - USA, 2 - Europa, 3 - Japonia),
+- **name** - nazwa samochodu.
+
+Format danych
+========================================================
+
+Dane w pliku `cars.csv` zostały przekształcone na jednostki metryczne za pomocą biblioteki `units`.
+```{r load_data, echo=TRUE}
 dat = read.csv("cars.csv", header = TRUE)
 
 gallon = as_units("gallon")
@@ -45,53 +110,35 @@ units(dat$weight) = with(ud_units, kg)
 
 dat$acceleration = dat$acceleration * 1.05
 
-dat = drop_units(dat)
+dat = drop_units(dat) #po przekształceniu jednostki nie są już potrzebne, oraz mogą powodować błędy
+dat = dat[order(dat$l100km),]
+
+origin_colors = c('red','blue','yellow') #USA - czerwony, Europa - niebieski, Japonia - żółty
 ```
-
-Projekt Poprawkowy
-========================================================
-author: "Antoni Baum, Bartłomiej Gąsior, Paweł Sumara"
-date: 
-autosize: true
-
-Wprowadzenie
-========================================================
-
-Celem projektu jest budowa modelu liniowego dla spalania w podanych danych. Aby otrzymać model, użyte zostaną zarówno klasyczne metody ekonometryczne, jak i metody bootstrapowe.
-
-Zmienne
-========================================================
-Zmienna objaśniana
-
-- **l100km** - spalanie w litrach na 100 kilometrów.
-
-Zmienne objaśniające
-
-- **cylinders** - liczba cylindrów,
-- **displacement** - objętość silnika w litrach,
-- **horsepower** - moc w koniach mechanicznych,
-- **weight** - waga w kilogramach,
-- **acceleration** - czas przyspieszenia od 0 do 100 kilometrów na godzinę, podany w sekundach,
-- **year** - rok produkcji,
-- **origin** - miejsce produkcji (1 - USA, 2 - Europa, 3 - Japonia),
-- **name** - nazwa samochodu.
 
 Format danych
 ========================================================
 
 ```{r cars, echo = FALSE, results="asis"}
-library(knitr)
-library(kableExtra)
-dat[1, ] %>%
+dat[1:5, ] %>%
   kable() %>%
-  kable_styling()
+  kable_styling(position = "center")
 ```
 
 Hipotezy
 ========================================================
-Na samym początku można załozyć, że nazwa samochodu nie będzie miała wpływu na spalanie. Najprawdopodobniej, rok produkcji (im nowszy samochód, tym mniejsze spalanie) oraz waga (im cięższy samochód, tym większe spalanie) będą miały największy wpływ.
+Na samym początku można załozyć, że nazwa samochodu nie będzie miała wpływu na spalanie. Z tego też powodu, odrzucono zmienną **name**.
 
-Z tego też powodu, odrzucono zmienną **name**.
+Najprawdopodobniej, ilość spalanego paliwa będzie wprost proporcjonalna do wagi (im cięższy samochód, tym większe spalanie), liczby cylindrów, objętości silnika, mocy, przyspieszenia (im większe, tym większe spalanie), a rok produkcji będzie odwrotnie proporcjonlany - wraz z postępem technicznym, silniki powinny być bardziej wydajne.
+
+Hipotezy
+========================================================
+- Ilość spalanego paliwa jest odwrotnie proporcjonalna do roku produkcji.
+- Ilość spalanego paliwa jest wprost proporcjonalna do wagi.
+- Ilość spalanego paliwa jest wprost proporcjonalna do liczby cylindrów.
+- Ilość spalanego paliwa jest wprost proporcjonalna do objętości silnika.
+- Ilość spalanego paliwa jest wprost proporcjonalna do mocy (**horsepower**).
+- Ilość spalanego paliwa jest wprost proporcjonalna do przyspieszenia.
 
 ```{r drop, include=FALSE}
 dat=within(dat, rm(name))
@@ -100,31 +147,202 @@ dat=within(dat, rm(name))
 Statystyki opisowe
 ========================================================
 ```{r summary, results="asis"}
-library(Rgretl)
-gr.script <- 
-"summary
-matrix r = $result"
-x = run_grcli(gr.script, data = dat, output = list(matr = c("r")))
-x = as.data.frame(x)
-rownames(x) = colnames(dat)
-colnames(x) = c("Mean", "Median", "Min.", "Max.", "Std. dev.", "CV", "Skewness", "Kurtosis", "5th Percentile", "95th Percentile", "Q3-Q1", "Missing obs." )
-x[,1:8]%>%
+CV = function(x){
+      (sd(x)/mean(x))
+      }
+
+mean = apply(dat, 2, mean)
+median = apply(dat, 2, median)
+min = apply(dat, 2, min)
+max = apply(dat, 2, max)
+sd = apply(dat, 2, sd)
+cv = apply(dat, 2, CV)
+summary_df = data.frame(mean, median, min, max, sd, cv)
+colnames(summary_df) = c("Mean", "Median", "Min.", "Max.", "Std. dev.", "CV")
+summary_df%>%
   kable() %>%
-  kable_styling()
+  kable_styling(position = "center")
+```
+Jeżeli współczynnik zmienności przyjmuje wartość mniejszą lub równą 0,1, zmienną traktuje się
+jako stałą i wyłącza z modelu. Najmniejszy współczynnik zmienności ma zmienna **year** (0.048). Zmienna objaśniana (**l100km**) zawiera się w przedziale [5.05; 26.13], z medianą równą 10.23 i średnią równa 11.22.
+
+Z powodu podanego powyżej, odrzucono zmienną **year**.
+```{r drop2, include=FALSE}
+dat=within(dat, rm(year))
 ```
 
 Macierz korelacji
 ========================================================
-```{r corr, results="asis"}
-library(Rgretl)
-gr.script <- 
-"corr
-matrix r = $result"
-x = run_grcli(gr.script, data = dat, output = list(matr = c("r")))
-x = as.data.frame(x)
-rownames(x) = colnames(dat)
-colnames(x) = colnames(dat)
-x %>%
-  kable() %>%
-  kable_styling()
+```{r corr, echo=FALSE, message=FALSE}
+library(corrgram)
+corrgram(dat, lower.panel=panel.shade, upper.panel=panel.cor)
 ```
+Zmienne objaśniające **cylinders** oraz **displacement** są najbardziej skorelowane ze sobą (0.95).
+Ponadto, zmienna **displacement** jest silnie skorelowana z zmiennymi **weight** oraz
+**horsepower**. Wysoka korelacja pomiędzy zmiennymi objaśniającymi jest
+zjawiskiem niepożądanym, prowadzącym do zawyżenia współczynnika determinacji. Jednakże, ponieważ zmienna **displacement** ma prawie dwukrotnie wyższy współczynnik determinacji niż zmienna **cylinders**, podjęto decyzję o usunięciu **cylinders**.
+
+Zmienna objaśniana jest najsilniej skorelowana ze zmienną **weight**.
+
+Można również zobaczyć, że hipotezy postawione wcześniej są zgodne z wynikami.
+```{r drop3, include=FALSE}
+dat=within(dat, rm(cylinders))
+```
+
+Analiza wizualna korelacji
+========================================================
+```{r plot1, fig.width=10, fig.height=10, fig.show='hold', fig.align='center'}
+with(dat,plot(dat[,-6],col=origin_colors[origin]))
+```
+USA - czerwony, Europa - niebieski, Japonia - żółty.
+
+Zmienna **acceleration** jest znacznie rozrzucona względem zmiennej objaśnianej - nie jest widoczny trend, jak dla pozostałych zmiennych. Z tego też powodu, zmienna **acceleration** zostaje odrzucona.
+```{r drop4, include=FALSE}
+dat=within(dat, rm(acceleration))
+```
+
+Zmienne po selekcji
+========================================================
+Zmienna objaśniana
+
+- **l100km** - spalanie w litrach na 100 kilometrów.
+
+Zmienne objaśniające
+
+- **displacement** - objętość silnika w litrach,
+- **horsepower** - moc w koniach mechanicznych,
+- **weight** - waga w kilogramach,
+- **origin** - miejsce produkcji (1 - USA, 2 - Europa, 3 - Japonia).
+
+Model liniowy MNK
+========================================================
+```{r mnk1, message=TRUE, warning=TRUE}
+summary(model <- lm(l100km ~., dat))
+```
+Model uzyskany metodą najmniejszych kwadratów ze wszystkich zmiennych po wstępnej selekcji ma duży współczynnik R-kwadrat (83%), co wskazuje na duże dopasowanie modelu do danych. Jednakże, zmienne **displacement** i **origin** mają duże p-value, co wskazuje na ich małą istotność statystyczną. Aby pozbyć się nieistotnych zmiennych, użyta zostanie metoda krokowa wstecz.
+
+Metoda krokowa wstecz
+========================================================
+```{r mnk2, message=TRUE, warning=TRUE}
+summary(model <- lm(l100km ~., dat[,!(names(dat) %in% c("displacement"))]))
+```
+
+Metoda krokowa wstecz
+========================================================
+```{r mnk3, message=TRUE, warning=TRUE}
+summary(model <- lm(l100km ~., dat[,!(names(dat) %in% c("displacement", "origin"))]))
+```
+Po usunięciu wszystkich nieistotnych zmiennych, w modelu pozostały zmienne **horsepower** oraz **weight**. Współczynnik R-kwadrat utrzymał się na tym samym poziomie co przed zastosowaniem metody krokowej wstecz (83%). Skorygowany R-kwadrat jest prawie identyczny, co wskazuje na brak zjawiska przeparametryzowania modelu.
+
+Diagnostyka modelu
+========================================================
+Test normalności rozkładu reszt
+```{r norm}
+shapiro.test(model$residuals)
+ad.test(model$residuals)
+```
+Wartości p testów Shapiro-Wilka i Andersona-Darlinga są niższe niż przyjęty poziom istotności (0.05). Nie ma podstaw do odrzucenia hipotezy zerowej o normalności rozkładu reszt. Rozkład reszt nie jest rozkładem normalnym.
+
+Diagnostyka modelu
+========================================================
+Badanie isototności zmiennych objaśniających
+```{r wald}
+waldtest(model)
+```
+Wartość p testu nie daje podstaw do odrzucenia hipotezy zerowej - wszystkie zmienne objaśniające są istotne.
+
+Diagnostyka modelu
+========================================================
+Test Ramseya RESET - służy do zbadania losowości próby, oraz poprawności postaci analitycznej
+modelu. Jeśli hipoteza zerowa jest spełniona, dobór jednostek jest losowy, oraz model jest
+poprawnej postaci.
+```{r reset}
+resettest(model)
+```
+Wartość p testu przekracza przyjęty poziom istotności (0.05), co umożliwia przyjęcie hipotezy zerowej.
+
+Diagnostyka modelu
+========================================================
+Badanie heteroskedastyczności - test Breusha-Pagana.
+```{r hetero}
+bptest(model)
+```
+Heteroskedastyczność to nieporządana sytuacja, gdy przynajmniej jedna zmienna losowa z ciągu różni się od innych wariancją lub jej wariancja jest nieskończona.
+
+Wartość p testu nie przekracza przyjętego poziom istotności (0.05), co oznacza, że w modelu występuje heteroskedastyczność.
+
+Metoda bootstrapowa
+========================================================
+Bootstrapping - dowolny test lub dane, które polegają na losowym próbkowaniu ze zwracaniem. Bootstrapping pozwala na przypisnie miar dokładności do próbnych oszacowań. Bootstrapping umożliwia oszacowanie rozkładu próbek większości statystyk przy użyciu losowych metod próbkowania.
+
+```{r boot, cache=TRUE}
+bootstrp <- boot.stepAIC(lm(l100km ~., dat), dat, alpha=.05, direction="backward", B=10000)
+bootstrp
+```
+Po oszacowaniu, do modelu weszły zmienne **horsepower**, **weight** oraz **origin**.
+
+Model liniowy bootstrapowy
+========================================================
+```{r bootmodel, cache=TRUE}
+summary(modelB <- lm(l100km ~ horsepower + weight + origin, dat))
+```
+Uzyskany model jest podobny (włącznie ze współczynnikiem determinacji) do modelu uzyskanego metodą krokową wstecz - jedyną różnicą jest zamieszczenie w nim zmiennej **origin**. Jej wartość p wskazuje na małą istotność statystyczną, i dlatego też została ona odrzucona podczas metody krokowej wstecz.
+
+Porównanie przedziałów ufności
+========================================================
+```{r compr}
+coefs <- summary(model)$coefficients
+classicalRange <- data.frame("const"=coefs[1,1] + qnorm(c(.025, .975))*coefs[1,2], "horsepower"=coefs[2,1] + qnorm(c(.025, .975))*coefs[2,2], "weight"=coefs[3,1] + qnorm(c(.025, .975))*coefs[3,2])
+classicalRange[nrow(classicalRange) + 1,] = c(abs(classicalRange[1,1]-classicalRange[2,1]),abs(classicalRange[1,2]-classicalRange[2,2]),abs(classicalRange[1,3]-classicalRange[2,3]))
+rownames(classicalRange) = c("L", "R", "Width")
+
+coefsB <- summary(modelB)$coefficients
+bootsRange <- data.frame("const"=coefsB[1,1] + qnorm(c(.025, .975))*coefsB[1,2], "horsepower"=coefsB[2,1] + qnorm(c(.025, .975))*coefsB[2,2], "weight"=coefsB[3,1] + qnorm(c(.025, .975))*coefsB[3,2], "origin"=coefsB[4,1] + qnorm(c(.025, .975))*coefsB[4,2])
+bootsRange[nrow(bootsRange) + 1,] = c(abs(bootsRange[1,1]-bootsRange[2,1]),abs(bootsRange[1,2]-bootsRange[2,2]),abs(bootsRange[1,3]-bootsRange[2,3]),abs(bootsRange[1,4]-bootsRange[2,4]))
+rownames(bootsRange) = c("L", "R", "Width")
+```
+Przedziały ufności dla modelu uzyskanego metodą krokową wstecz:
+```{r classicalRange}
+classicalRange%>%
+  kable() %>%
+  kable_styling(position = "center")
+```
+
+Przedziały ufności dla modelu uzyskanego metodą bootstrapową:
+```{r bootsRange}
+bootsRange%>%
+  kable() %>%
+  kable_styling(position = "center")
+```
+
+Można zaobserwować, że przedziały ufności współczynników **horsepower** oraz **weight** nie różnią się znacznie.
+
+Wykres rozkładu współczynnika horsepower
+========================================================
+```{r horsepower, fig.width=10, fig.height=10, fig.show='hold', fig.align='center'}
+par_horsepower <- tibble(Bootstrap = coefsB[2,1] + rnorm(10^4)*coefsB[2,2],
+                         MKW = coefs[2,1] + rnorm(10^4)*coefs[2,2]) %>% gather(type, parameter)
+par_horsepower %>%
+  ggplot(aes(x = parameter, col = type, fill= type)) + 
+  geom_density(alpha = .5) +
+  labs(title="Gęstość rozkładu współczynnika horsepower", x="parametr", y="gęstość rozkładu") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+Przedziały ufności nie różnią się istotnie szerokością.
+
+Wykres rozkładu współczynnika weight
+========================================================
+```{r weight, fig.width=10, fig.height=10, fig.show='hold', fig.align='center'}
+par_horsepower <- tibble(Bootstrap = coefsB[3,1] + rnorm(10^4)*coefsB[3,2],
+                         MKW = coefs[3,1] + rnorm(10^4)*coefs[3,2]) %>% gather(type, parameter)
+par_horsepower %>%
+  ggplot(aes(x = parameter, col = type, fill= type)) + 
+  geom_density(alpha = .5) +
+  labs(title="Gęstość rozkładu współczynnika horsepower", x="parametr", y="gęstość rozkładu") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+Przedziały ufności są przesunięte między sobą, oraz nie różnią się istotnie szerokością.
+
+Podsumowanie
+========================================================
+Zarówno model uzyskany metodą krokową wstecz, jak i metodą bootstrapową, dobrze opisuje zjawisko spalania. Ich współczynniki determinacji or szerokości rozkładów reszt nie różnią się istotnie. Model uzyskany metodą krokową wstecz nie spełnia warunku homoskedastyczności, co może być jednak skorygowane poprzez odpowiednie przekształcenia.
